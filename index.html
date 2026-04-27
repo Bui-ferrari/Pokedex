@@ -2589,18 +2589,7 @@ document.getElementById('scope-poke-overlay').onclick=e=>{if(e.target===e.curren
 // ============================================================
 // TCG CARDS — TCGdex API
 // ============================================================
-// TCGdex SDK (loaded via CDN)
-// window.TCGdex is available after the CDN script loads
-let tcgdexSDK = null;
-function getTCGdex() {
-  if(tcgdexSDK) return tcgdexSDK;
-  if(window.TCGdex) {
-    tcgdexSDK = new window.TCGdex('en');
-    return tcgdexSDK;
-  }
-  return null;
-}
-const TCGDEX_BASE = 'https://api.tcgdex.net/v2/en'; // fallback
+const TCGDEX_BASE = 'https://api.tcgdex.net/v2/en';
 let currentTCGCard = null;
 let tcgSearchTimeout = null;
 
@@ -2622,23 +2611,15 @@ async function searchTCGCards() {
       return;
     }
     let data = null;
-    const sdk = getTCGdex();
-    if(sdk) {
-      // Use SDK (better cache + error handling)
-      const filters = {};
-      if(q) filters.name = q;
-      if(typeF) filters.types = typeF;
-      if(rarityF) filters.rarity = rarityF;
-      data = await sdk.fetch('cards', filters);
-    } else {
-      // Fallback to direct fetch
-      const params = new URLSearchParams();
-      if(q) params.set('name', q);
-      if(typeF) params.set('types', typeF);
-      if(rarityF) params.set('rarity', rarityF);
-      const res = await fetch(TCGDEX_BASE + '/cards?' + params.toString());
-      if(res.ok) data = await res.json();
-    }
+    // Build query params correctly
+    const params = new URLSearchParams();
+    if(q) params.set('name', q);
+    if(typeF) params.set('types', typeF);
+    if(rarityF) params.set('rarity', rarityF);
+    const url = TCGDEX_BASE + '/cards?' + params.toString();
+    const res = await fetch(url);
+    if(res.ok) data = await res.json();
+    else throw new Error('HTTP ' + res.status);
     loading.style.display='none';
     if(!data||!data.length) {
       empty.innerHTML='<p>Nenhuma carta<br>encontrada.</p>';
@@ -2658,16 +2639,10 @@ async function searchTCGCards() {
 
 async function fetchAndShowTCGCard(id) {
   try {
-    const sdk = getTCGdex();
-    let card;
-    if(sdk) {
-      card = await sdk.fetch('cards', id);
-    } else {
-      const r = await fetch(TCGDEX_BASE+'/cards/'+id);
-      if(r.ok) card = await r.json();
-    }
-    if(card) openTCGDetail(card);
-  } catch(e) { console.error('TCG fetch card:', e); showToast('Erro ao carregar carta.'); }
+    const r = await fetch(TCGDEX_BASE + '/cards/' + id);
+    if(r.ok) { const card = await r.json(); if(card) openTCGDetail(card); }
+    else showToast('Carta não encontrada.');
+  } catch(e) { console.error('TCG fetch card:', e); showToast('Erro ao carregar carta. Desative o ad-blocker.'); }
 }
 
 function renderTCGGrid(cards) {
@@ -2711,9 +2686,8 @@ async function quickToggleTCGCard(e,cardId) {
 async function openTCGDetailFromCard(card) {
   if(!card.attacks && card.id) {
     try {
-      const sdk = getTCGdex();
-      if(sdk) { const full = await sdk.fetch('cards', card.id); if(full) card = full; }
-      else { const r=await fetch(TCGDEX_BASE+'/cards/'+card.id); if(r.ok) card=await r.json(); }
+      const r = await fetch(TCGDEX_BASE + '/cards/' + card.id);
+      if(r.ok) card = await r.json();
     } catch(e){}
   }
   openTCGDetail(card);
