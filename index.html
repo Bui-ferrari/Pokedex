@@ -13,6 +13,7 @@
 <title>LiguinhaDex</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tcgdex/sdk@2.4.9/dist/tcgdex.browser.js"></script>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged }
@@ -714,7 +715,45 @@ input,select{font-family:'Exo 2',sans-serif;}
   <div class="sheet">
     <div class="sheet-title">MINHAS COLEÇÕES<button class="sheet-close" onclick="closeCollManager()">×</button></div>
     <div class="coll-list" id="coll-list"></div>
-    <div class="ncf" id="new-coll-form">
+    <!-- EDIT COLLECTION MODAL -->
+<div class="overlay-bg" id="edit-coll-overlay">
+  <div class="sheet" style="max-width:540px">
+    <div class="sheet-title">EDITAR COLEÇÃO<button class="sheet-close" onclick="closeEditColl()">×</button></div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <input class="ncf-input" id="edit-name" placeholder="Nome da coleção" maxlength="40">
+      <input class="ncf-input" id="edit-desc" placeholder="Descrição (opcional)" maxlength="100">
+      <div class="ncf-row">
+        <img class="ncf-preview" id="edit-preview" src="" onerror="this.style.opacity=0" style="opacity:0">
+        <button class="ncf-img-btn">📷 Mudar imagem<input type="file" accept="image/*" onchange="handleEditImg(event)"></button>
+      </div>
+      <!-- Color picker -->
+      <div>
+        <div style="font-size:10px;color:var(--text2);margin-bottom:8px">Cor da coleção:</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center" id="edit-colors">
+          <div class="coll-color-dot" data-color="#7c6cfa" style="background:#7c6cfa" onclick="selectEditColor(this,'#7c6cfa')"></div>
+          <div class="coll-color-dot" data-color="#E53935" style="background:#E53935" onclick="selectEditColor(this,'#E53935')"></div>
+          <div class="coll-color-dot" data-color="#F57C00" style="background:#F57C00" onclick="selectEditColor(this,'#F57C00')"></div>
+          <div class="coll-color-dot" data-color="#FFD700" style="background:#FFD700" onclick="selectEditColor(this,'#FFD700')"></div>
+          <div class="coll-color-dot" data-color="#43A047" style="background:#43A047" onclick="selectEditColor(this,'#43A047')"></div>
+          <div class="coll-color-dot" data-color="#00ACC1" style="background:#00ACC1" onclick="selectEditColor(this,'#00ACC1')"></div>
+          <div class="coll-color-dot" data-color="#1E88E5" style="background:#1E88E5" onclick="selectEditColor(this,'#1E88E5')"></div>
+          <div class="coll-color-dot" data-color="#E91E63" style="background:#E91E63" onclick="selectEditColor(this,'#E91E63')"></div>
+          <div class="coll-color-dot" data-color="#9C27B0" style="background:#9C27B0" onclick="selectEditColor(this,'#9C27B0')"></div>
+          <div class="coll-color-dot" data-color="#607D8B" style="background:#607D8B" onclick="selectEditColor(this,'#607D8B')"></div>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2)">
+            <input type="color" id="edit-custom-color" value="#7c6cfa" style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border2);cursor:pointer;padding:0" onchange="selectEditColor(null,this.value)">
+            Outra
+          </label>
+        </div>
+      </div>
+      <!-- Type (read-only for existing — changing type could lose data) -->
+      <div id="edit-type-display" style="padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text2)"></div>
+      <button style="width:100%;padding:11px;border-radius:10px;background:var(--accent);border:none;color:#fff;font-family:'Press Start 2P',monospace;font-size:8px;margin-top:4px" onclick="saveEditColl()">✓ SALVAR ALTERAÇÕES</button>
+    </div>
+  </div>
+</div>
+
+<div class="ncf" id="new-coll-form"><div class="ncf" id="new-coll-form">
       <div class="ncf-ttl">NOVA COLEÇÃO</div>
       <input class="ncf-input" id="ncf-name" placeholder="Nome da coleção" maxlength="40">
       <input class="ncf-input" id="ncf-desc" placeholder="Descrição (opcional)" maxlength="100">
@@ -1332,6 +1371,7 @@ function renderCollList() {
       </div>
       <div class="coll-item-actions">
         <button class="icon-btn" style="border-color:rgba(0,230,118,0.3);color:rgba(0,230,118,0.8);background:rgba(0,230,118,0.08)" onclick="event.stopPropagation();openScopePoke('${id}')" title="Selecionar Pokémon">✦</button>
+        <button class="icon-btn" style="border-color:rgba(124,108,250,0.4);color:var(--accent2);background:rgba(124,108,250,0.1)" onclick="event.stopPropagation();openEditColl('${id}')" title="Editar coleção">✏️</button>
         <button class="icon-btn share" onclick="event.stopPropagation();openShareModal('${id}')" title="Compartilhar">🔗</button>
         ${id!=='default'?`<button class="icon-btn del" onclick="event.stopPropagation();deleteColl('${id}')">🗑</button>`:''}
       </div>
@@ -1392,6 +1432,86 @@ async function deleteColl(id) {
   delete collections[id];
   if (currentCollId === id) { currentCollId = 'default'; updateCollBanner(); }
   await saveUserData(); renderCollList(); updateStats(); applyFilters(); refreshMyGrid();
+}
+
+// ============================================================
+// EDIT COLLECTION
+// ============================================================
+let editingCollId = null;
+let editCollImgB64 = null; // null = keep current
+let editCollColor = '#7c6cfa';
+
+function openEditColl(id) {
+  editingCollId = id;
+  const coll = collections[id]; if(!coll) return;
+  editCollImgB64 = null; // don't change image unless user picks new one
+  editCollColor = coll.color || '#7c6cfa';
+
+  document.getElementById('edit-name').value = coll.name || '';
+  document.getElementById('edit-desc').value = coll.desc || '';
+
+  // Preview current image
+  const prev = document.getElementById('edit-preview');
+  if(coll.img) { prev.src = coll.img; prev.style.opacity = '1'; }
+  else { prev.src = ''; prev.style.opacity = '0'; }
+
+  // Set color dots
+  document.querySelectorAll('#edit-colors .coll-color-dot').forEach(d => {
+    d.classList.toggle('active', d.dataset.color === editCollColor);
+  });
+  const customColorInput = document.getElementById('edit-custom-color');
+  if(customColorInput) customColorInput.value = editCollColor;
+
+  // Show type (read-only)
+  const typeDisplay = document.getElementById('edit-type-display');
+  typeDisplay.innerHTML = `Tipo: <strong>${coll.type === 'cards' ? '🃏 Cartas TCG' : '🗂️ Pokémon'}</strong> <span style="opacity:0.5;font-size:10px">(não pode ser alterado)</span>`;
+
+  document.getElementById('edit-coll-overlay').classList.add('on');
+}
+
+function closeEditColl() {
+  document.getElementById('edit-coll-overlay').classList.remove('on');
+  editingCollId = null;
+}
+
+function handleEditImg(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    editCollImgB64 = ev.target.result;
+    const prev = document.getElementById('edit-preview');
+    prev.src = editCollImgB64; prev.style.opacity = '1';
+  };
+  r.readAsDataURL(file);
+}
+
+function selectEditColor(el, color) {
+  editCollColor = color;
+  document.querySelectorAll('#edit-colors .coll-color-dot').forEach(d => d.classList.remove('active'));
+  if(el) el.classList.add('active');
+  const custom = document.getElementById('edit-custom-color');
+  if(custom) custom.value = color;
+}
+
+async function saveEditColl() {
+  if(!editingCollId) return;
+  const coll = collections[editingCollId]; if(!coll) return;
+
+  const name = document.getElementById('edit-name').value.trim();
+  if(!name) { showToast('O nome não pode ser vazio!'); return; }
+
+  coll.name = name;
+  coll.desc = document.getElementById('edit-desc').value.trim();
+  coll.color = editCollColor;
+  if(editCollImgB64 !== null) coll.img = editCollImgB64;
+
+  await saveUserData();
+  closeEditColl();
+  renderCollList();
+  updateCollBanner();
+  updateStats();
+  if(editingCollId === currentCollId) applyCollectionTheme(editCollColor);
+  showToast('Coleção atualizada! ✓', 'ok');
 }
 
 // Scope chip toggles
@@ -2458,6 +2578,8 @@ document.querySelectorAll('.ftag').forEach(btn=>{
   };
 });
 document.getElementById('coll-overlay').onclick=e=>{if(e.target===e.currentTarget)closeCollManager();};
+document.getElementById('edit-coll-overlay').onclick=e=>{if(e.target===e.currentTarget)closeEditColl();};
+document.getElementById('edit-coll-overlay').onclick=e=>{if(e.target===e.currentTarget)closeEditColl();};
 document.getElementById('cap-modal').onclick=e=>{if(e.target===e.currentTarget)closeCapModal();};
 document.getElementById('share-overlay').onclick=e=>{if(e.target===e.currentTarget)closeShareModal();};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDetail();closeCollManager();closeCapModal();closeShareModal();closeQcap();closeScopePoke();}});
@@ -2467,7 +2589,18 @@ document.getElementById('scope-poke-overlay').onclick=e=>{if(e.target===e.curren
 // ============================================================
 // TCG CARDS — TCGdex API
 // ============================================================
-const TCGDEX_BASE = 'https://api.tcgdex.net/v2/en';
+// TCGdex SDK (loaded via CDN)
+// window.TCGdex is available after the CDN script loads
+let tcgdexSDK = null;
+function getTCGdex() {
+  if(tcgdexSDK) return tcgdexSDK;
+  if(window.TCGdex) {
+    tcgdexSDK = new window.TCGdex('en');
+    return tcgdexSDK;
+  }
+  return null;
+}
+const TCGDEX_BASE = 'https://api.tcgdex.net/v2/en'; // fallback
 let currentTCGCard = null;
 let tcgSearchTimeout = null;
 
@@ -2482,30 +2615,59 @@ async function searchTCGCards() {
   const empty = document.getElementById('tcg-empty');
   results.innerHTML=''; loading.style.display='flex'; empty.style.display='none';
   try {
-    if(q.match(/^[a-zA-Z0-9]+-[0-9]+$/)) { await fetchAndShowTCGCard(q); loading.style.display='none'; return; }
-    const params = new URLSearchParams();
-    if(q) params.set('name', q);
-    if(typeF) params.set('types', typeF);
-    if(rarityF) params.set('rarity', rarityF);
-    const res = await fetch(TCGDEX_BASE + '/cards?' + params.toString());
-    if(!res.ok) throw new Error('API ' + res.status);
-    const data = await res.json();
+    // Check if it looks like a card code e.g. swsh3-136
+    if(q.match(/^[a-zA-Z0-9]+-[0-9]+$/i)) {
+      await fetchAndShowTCGCard(q);
+      loading.style.display='none';
+      return;
+    }
+    let data = null;
+    const sdk = getTCGdex();
+    if(sdk) {
+      // Use SDK (better cache + error handling)
+      const filters = {};
+      if(q) filters.name = q;
+      if(typeF) filters.types = typeF;
+      if(rarityF) filters.rarity = rarityF;
+      data = await sdk.fetch('cards', filters);
+    } else {
+      // Fallback to direct fetch
+      const params = new URLSearchParams();
+      if(q) params.set('name', q);
+      if(typeF) params.set('types', typeF);
+      if(rarityF) params.set('rarity', rarityF);
+      const res = await fetch(TCGDEX_BASE + '/cards?' + params.toString());
+      if(res.ok) data = await res.json();
+    }
     loading.style.display='none';
-    if(!data||!data.length) { empty.innerHTML='<p>Nenhuma carta<br>encontrada.</p>'; empty.style.display='block'; return; }
-    let cards = data;
-    if(collF==='owned') cards=data.filter(cd=>isCardOwned(cd.id));
-    else if(collF==='missing') cards=data.filter(cd=>!isCardOwned(cd.id));
+    if(!data||!data.length) {
+      empty.innerHTML='<p>Nenhuma carta<br>encontrada.</p>';
+      empty.style.display='block'; return;
+    }
+    let cards = Array.isArray(data) ? data : (data.data || []);
+    if(collF==='owned') cards=cards.filter(cd=>isCardOwned(cd.id));
+    else if(collF==='missing') cards=cards.filter(cd=>!isCardOwned(cd.id));
     renderTCGGrid(cards.slice(0,100));
   } catch(e) {
     loading.style.display='none';
-    empty.innerHTML='<p>Erro ao buscar.<br>Verifique a conexao.</p>';
+    empty.innerHTML='<p>Erro ao buscar.<br>Desative o ad-blocker<br>e tente novamente.</p>';
     empty.style.display='block';
     console.error('TCG:', e);
   }
 }
 
 async function fetchAndShowTCGCard(id) {
-  try { const r=await fetch(TCGDEX_BASE+'/cards/'+id); if(r.ok) openTCGDetail(await r.json()); } catch(e){}
+  try {
+    const sdk = getTCGdex();
+    let card;
+    if(sdk) {
+      card = await sdk.fetch('cards', id);
+    } else {
+      const r = await fetch(TCGDEX_BASE+'/cards/'+id);
+      if(r.ok) card = await r.json();
+    }
+    if(card) openTCGDetail(card);
+  } catch(e) { console.error('TCG fetch card:', e); showToast('Erro ao carregar carta.'); }
 }
 
 function renderTCGGrid(cards) {
@@ -2547,7 +2709,13 @@ async function quickToggleTCGCard(e,cardId) {
 }
 
 async function openTCGDetailFromCard(card) {
-  if(!card.attacks&&card.id){ try{const r=await fetch(TCGDEX_BASE+'/cards/'+card.id);if(r.ok)card=await r.json();}catch(e){} }
+  if(!card.attacks && card.id) {
+    try {
+      const sdk = getTCGdex();
+      if(sdk) { const full = await sdk.fetch('cards', card.id); if(full) card = full; }
+      else { const r=await fetch(TCGDEX_BASE+'/cards/'+card.id); if(r.ok) card=await r.json(); }
+    } catch(e){}
+  }
   openTCGDetail(card);
 }
 
@@ -2685,6 +2853,9 @@ window.addEventListener('popstate', function(e) {
   if(document.getElementById('tcg-detail-overlay').classList.contains('on')){
     closeTCGDetail(); return;
   }
+  if(document.getElementById('edit-coll-overlay').classList.contains('on')){
+    closeEditColl(); return;
+  }
   if(document.getElementById('detail').classList.contains('on')){
     closeDetail(); return;
   }
@@ -2719,6 +2890,8 @@ const _openQcapOrig = openQcap;
 openQcap = function(id){ _openQcapOrig(id); pushNavState({o:'qcap'}); };
 const _openCollOrig = openCollManager;
 openCollManager = function(){ _openCollOrig(); pushNavState({o:'coll'}); };
+const _openEditCollOrig = openEditColl;
+openEditColl = function(id){ _openEditCollOrig(id); pushNavState({o:'edit-coll'}); };
 
 </script>
 </body>
